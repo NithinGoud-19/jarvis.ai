@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+*.log
+# AI models / voice models are large — never commit them
+models/
+*.gguf
+*.onnx
+*.bin
+# databases
+*.sqlite
+*.db
+*.db-wal
+*.db-shm
+server/data/
+# voice programs (downloaded, large)
+server/bin/

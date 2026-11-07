@@ -1,0 +1,101 @@
+@import "tailwindcss";
+@import "@fontsource/orbitron/500.css";
+@import "@fontsource/orbitron/700.css";
+
+@theme {
+  --color-jarvis-bg: #050b14;
+  --color-jarvis-panel: #0a1626;
+  --color-jarvis-cyan: #22d3ee;
+  --color-jarvis-blue: #3b82f6;
+  --font-hud: "Orbitron", "Segoe UI", system-ui, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  color: #cfe8f5;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background-color: #050b14;
+  /* soft glow on top + faint HUD grid */
+  background-image:
+    radial-gradient(ellipse at 50% -10%, rgba(34, 211, 238, 0.14), transparent 55%),
+    linear-gradient(rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    40px 40px,
+    40px 40px;
+}
+
+/* Thin cyan scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.25) transparent;
+}
+
+/* ── HUD panel ─────────────────────────────────────────── */
+.hud-panel {
+  position: relative;
+  background: linear-gradient(180deg, rgba(10, 26, 44, 0.78), rgba(6, 16, 30, 0.78));
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 0 30px rgba(34, 211, 238, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+.hud-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: rgba(34, 211, 238, 0.75);
+  pointer-events: none;
+}
+.hud-corner.tl { top: -1px; left: -1px; border-top: 2px solid; border-left: 2px solid; border-top-left-radius: 6px; }
+.hud-corner.tr { top: -1px; right: -1px; border-top: 2px solid; border-right: 2px solid; border-top-right-radius: 6px; }
+.hud-corner.bl { bottom: -1px; left: -1px; border-bottom: 2px solid; border-left: 2px solid; border-bottom-left-radius: 6px; }
+.hud-corner.br { bottom: -1px; right: -1px; border-bottom: 2px solid; border-right: 2px solid; border-bottom-right-radius: 6px; }
+
+.glow-text {
+  text-shadow: 0 0 12px rgba(34, 211, 238, 0.55);
+}
+
+/* ── Animations ────────────────────────────────────────── */
+@keyframes core-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes core-pulse {
+  0%, 100% { opacity: 0.65; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(400%); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.core-ring { animation: core-spin 14s linear infinite; transform-origin: center; }
+.core-ring-rev { animation: core-spin 20s linear infinite reverse; transform-origin: center; }
+.core-ring-fast { animation-duration: 1.6s !important; }
+.core-pulse { animation: core-pulse 2.6s ease-in-out infinite; }
+.fade-up { animation: fade-up 0.35s ease-out both; }
+.scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 25%;
+  background: linear-gradient(180deg, transparent, rgba(34, 211, 238, 0.06), transparent);
+  animation: scan 6s linear infinite;
+  pointer-events: none;
+}
+
+/* Respect "reduce motion" accessibility setting */
+@media (prefers-reduced-motion: reduce) {
+  .core-ring, .core-ring-rev, .core-pulse, .scanline::after, .fade-up { animation: none !important; }
+}
