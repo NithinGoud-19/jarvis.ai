@@ -16,14 +16,16 @@ import { ActivityView } from "./views/ActivityView";
 import { ChatView } from "./views/ChatView";
 import { DashboardView } from "./views/DashboardView";
 import { EmailView } from "./views/EmailView";
+import { JobsView } from "./views/JobsView";
 import { MemoryView } from "./views/MemoryView";
 import { SettingsView } from "./views/SettingsView";
 
-const VIEWS: View[] = ["dashboard", "chat", "email", "activity", "memory", "settings"];
+const VIEWS: View[] = ["dashboard", "chat", "email", "jobs", "activity", "memory", "settings"];
 const TITLES: Record<View, string> = {
   dashboard: "COMMAND CENTER",
   chat: "CONVERSATION",
   email: "COMMUNICATIONS",
+  jobs: "JOB OPERATIONS",
   activity: "ACTIVITY LOG",
   memory: "MEMORY CORE",
   settings: "SYSTEM SETTINGS",
@@ -195,6 +197,7 @@ export default function App() {
             />
           )}
           {view === "email" && <EmailView active gmail={gmail} onCommand={runCommand} onOpenSettings={() => go("settings")} />}
+          {view === "jobs" && <JobsView active />}
           {view === "activity" && <ActivityView active refreshKey={refreshKey} />}
           {view === "memory" && <MemoryView active onChanged={() => setRefreshKey((k) => k + 1)} />}
           {view === "settings" && (

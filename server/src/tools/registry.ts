@@ -13,6 +13,7 @@ import { getBattery, getSystemInfo, getTime } from "./system.js";
 import { openApp, openWebsite, webSearch } from "./apps.js";
 import { listFolder } from "./files.js";
 import { gmailRead, gmailSearch } from "./gmail.js";
+import { jobApply, jobSearch, jobsList, jobUpdateStatus } from "./jobs.js";
 import { logToolCall } from "../database/toolLogs.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,6 +27,10 @@ const TOOLS: Tool<any>[] = [
   listFolder,
   gmailSearch,
   gmailRead,
+  jobSearch,
+  jobsList,
+  jobUpdateStatus,
+  jobApply,
 ];
 
 const byName = new Map(TOOLS.map((t) => [t.name, t]));

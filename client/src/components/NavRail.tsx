@@ -1,16 +1,16 @@
-export type View = "dashboard" | "chat" | "email" | "activity" | "memory" | "settings";
+export type View = "dashboard" | "chat" | "email" | "jobs" | "activity" | "memory" | "settings";
 
 const ITEMS: { id: View; icon: string; label: string }[] = [
   { id: "dashboard", icon: "◉", label: "Dashboard" },
   { id: "chat", icon: "💬", label: "Chat" },
   { id: "email", icon: "✉", label: "Email" },
+  { id: "jobs", icon: "💼", label: "Jobs" },
   { id: "activity", icon: "⚡", label: "Activity" },
   { id: "memory", icon: "🧠", label: "Memory" },
 ];
 
 // Features that are planned but NOT built yet — shown honestly as "soon", not as fake pages
 const SOON = [
-  { icon: "💼", label: "Jobs" },
   { icon: "📅", label: "Calendar" },
 ];
 

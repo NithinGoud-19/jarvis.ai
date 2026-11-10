@@ -93,7 +93,100 @@ export const listToolLogs = () => request<ToolLog[]>("/api/tools/logs");
 /** SQLite stores UTC without a "Z" → convert to a real Date. */
 export const sqliteDate = (s: string) => new Date(s.replace(" ", "T") + "Z");
 
-export type VoiceStatus = { speechToText: boolean; textToSpeech: boolean; missing: string[] };
+// ---------- Jobs ----------
+export type JobStatus = "new" | "saved" | "applied" | "interview" | "offer" | "rejected" | "ignored";
+export type Job = {
+  id: number;
+  company_id: number;
+  company: string;
+  title: string;
+  location: string;
+  url: string;
+  posted_at: string | null;
+  status: JobStatus;
+  first_seen_at: string;
+  last_seen_at: string;
+  has_description: boolean;
+  match_score: number | null;
+  match_details: MatchDetails | null;
+  ai_review: AiReview | null;
+  ai_reviewed_at: string | null;
+};
+export type MatchDetails = {
+  have: string[];
+  missing: string[];
+  yearsAsked: number | null;
+  reasons: string[];
+  hasDescription: boolean;
+};
+export type AiReview = {
+  verdict: "strong" | "possible" | "weak";
+  summary: string;
+  matching: string[];
+  gaps: string[];
+  tips: string[];
+};
+export type JobSearchResult = {
+  role: string;
+  location: string;
+  companiesSearched: number;
+  failed: { company: string; error: string }[];
+  jobs: (Job & { isNew: boolean })[];
+  newCount: number;
+  ms: number;
+};
+export type Company = { id: number; name: string; ats: string; slug: string; enabled: 0 | 1 };
+
+export const listJobs = (status?: JobStatus, q?: string, sort: "score" | "recent" = "score") => {
+  const params = new URLSearchParams({ sort });
+  if (status) params.set("status", status);
+  if (q) params.set("q", q);
+  return request<Job[]>(`/api/jobs?${params}`);
+};
+export const getJobCounts = () => request<Record<string, number>>("/api/jobs/counts");
+export const searchJobs = (role: string, location: string) =>
+  request<JobSearchResult>("/api/jobs/search", { method: "POST", body: JSON.stringify({ role, location }) });
+export const setJobStatus = (id: number, status: JobStatus) =>
+  request<Job>(`/api/jobs/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+export const getJob = (id: number) => request<Job & { description: string | null }>(`/api/jobs/${id}`);
+export const reviewJob = (id: number) => request<AiReview>(`/api/jobs/${id}/review`, { method: "POST" });
+export const rescoreJobs = () => request<{ scored: number }>("/api/jobs/rescore", { method: "POST" });
+export type ApplyItem = { question: string; value?: string; reason?: string; remembered?: boolean };
+export type ApplySession = {
+  jobId: number;
+  title: string;
+  company: string;
+  url: string;
+  state: "opening" | "filling" | "drafting" | "ready" | "error";
+  startedAt: string;
+  finishedAt: string | null;
+  log: string[];
+  filled: ApplyItem[];
+  drafted: ApplyItem[];
+  needsYou: ApplyItem[];
+  sensitive: ApplyItem[];
+  resumeUploaded: boolean;
+  error: string | null;
+  learning: ApplyItem[];
+  done: boolean;
+};
+export type SavedAnswer = { id: number; question: string; answer: string; uses: number; updated_at: string };
+export const finishApply = (id: number) =>
+  request<{ learned: ApplyItem[]; job: Job }>(`/api/jobs/${id}/apply/done`, { method: "POST" });
+export const listSavedAnswers = () => request<SavedAnswer[]>("/api/jobs/answers");
+export const updateSavedAnswer = (id: number, answer: string) =>
+  request<SavedAnswer>(`/api/jobs/answers/${id}`, { method: "PATCH", body: JSON.stringify({ answer }) });
+export const deleteSavedAnswer = (id: number) => request<void>(`/api/jobs/answers/${id}`, { method: "DELETE" });
+export const startApply = (id: number) => request<ApplySession>(`/api/jobs/${id}/apply`, { method: "POST" });
+/** null = never started for this job. */
+export const getApplySession = (id: number) =>
+  fetch(`/api/jobs/${id}/apply`).then((r) => (r.ok ? (r.json() as Promise<ApplySession>) : null));
+export const listCompanies = () => request<Company[]>("/api/jobs/companies");
+export const addCompany = (name: string, url: string) =>
+  request<Company & { liveJobs: number }>("/api/jobs/companies", { method: "POST", body: JSON.stringify({ name, url }) });
+export const deleteCompany = (id: number) => request<void>(`/api/jobs/companies/${id}`, { method: "DELETE" });
+
+export type VoiceStatus ={ speechToText: boolean; textToSpeech: boolean; missing: string[] };
 export const getVoiceStatus = () => request<VoiceStatus>("/api/voice/status");
 
 /** Sends WAV audio, gets back the words spoken. */

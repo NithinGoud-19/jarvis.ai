@@ -19,6 +19,7 @@ import { toolsRouter } from "./routes/tools.js";
 import { voiceRouter } from "./routes/voice.js";
 import { gmailRouter } from "./routes/gmail.js";
 import { systemRouter } from "./routes/system.js";
+import { jobsRouter } from "./routes/jobs.js";
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/api/tools", toolsRouter);
 app.use("/api/voice", voiceRouter);
 app.use("/api/gmail", gmailRouter);
 app.use("/api/system", systemRouter);
+app.use("/api/jobs", jobsRouter);
 
 app.use(notFound);
 app.use(errorHandler);

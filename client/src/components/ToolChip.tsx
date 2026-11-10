@@ -10,6 +10,10 @@ const LABELS: Record<string, string> = {
   list_folder: "Looking in folder",
   gmail_search: "Searching Gmail",
   gmail_read: "Reading email",
+  job_search: "Scanning career pages",
+  jobs_list: "Checking job tracker",
+  job_update_status: "Updating job",
+  job_apply: "Filling application",
 };
 
 function describeArgs(args: Record<string, unknown>): string {

@@ -21,4 +21,8 @@ export const config = {
   // Google OAuth "Desktop app" client (free) — see README "Gmail setup". SECRET: only in .env!
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  // Job form-filler (Playwright). "msedge" = the Edge already on Windows (no extra download).
+  browserChannel: process.env.BROWSER_CHANNEL ?? "msedge",
+  // Hidden browser — only for automated tests. Normally the window is visible so you can review + submit.
+  applyHeadless: process.env.APPLY_HEADLESS === "1",
 };

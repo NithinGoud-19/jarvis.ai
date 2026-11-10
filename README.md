@@ -98,6 +98,20 @@ jarvis/
 | POST | `/api/gmail/disconnect` | Revoke + delete tokens |
 | GET | `/api/gmail/messages?q=&max=` | Search emails (read-only) |
 | GET | `/api/gmail/messages/:id` | One full email (reader) |
+| POST | `/api/jobs/search` | Body `{ role, location? }` → live search on company career pages, saves matches |
+| GET | `/api/jobs?status=&q=&sort=score\|recent` | Job tracker list with match scores (hides "ignored") |
+| GET | `/api/jobs/:id` | One job with its full description |
+| POST | `/api/jobs/:id/review` | AI review of one job vs your profile (~1–2 min on CPU) |
+| POST | `/api/jobs/:id/apply` | Open the job's application form in Edge and fill it (profile + resume + AI drafts). **Never submits** — you review and click Submit. Greenhouse, Lever, Ashby |
+| GET | `/api/jobs/:id/apply` | Progress of that form-filling session (the UI polls this) |
+| POST | `/api/jobs/:id/apply/done` | "I submitted it" → saves the answers you typed into the form + marks the job applied |
+| GET | `/api/jobs/answers` | Answer bank: what JARVIS learned from your past applications |
+| PATCH / DELETE | `/api/jobs/answers/:id` | Edit `{ answer }` / forget a saved answer |
+| POST | `/api/jobs/rescore` | Re-score all jobs after editing `server/data/profile.json` |
+| GET | `/api/jobs/counts` | Jobs per status |
+| PATCH | `/api/jobs/:id` | Body `{ status }` (new/saved/applied/interview/offer/rejected/ignored) |
+| GET / POST | `/api/jobs/companies` | List / add a company by careers link `{ name, url }` (Greenhouse, Lever, Ashby, SmartRecruiters, Workday) |
+| DELETE | `/api/jobs/companies/:id` | Stop checking a company |
 | GET | `/api/system` | Live CPU %, RAM, battery, uptime |
 
 ## Progress

@@ -106,3 +106,37 @@ export async function* streamChat(
     }
   }
 }
+
+/**
+ * 📘 LESSON: Structured output
+ * Normally the AI writes free text. For code we need DATA we can rely on. Ollama's
+ * `format` option takes a JSON Schema and forces the model's answer to fit it, so we
+ * can JSON.parse() the reply safely (we still validate it with zod afterwards).
+ */
+export async function chatJson(
+  messages: ChatMessage[],
+  schema: object,
+  opts: { numCtx?: number; signal?: AbortSignal } = {},
+): Promise<unknown> {
+  const res = await fetch(`${config.ollamaUrl}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.ollamaModel,
+      messages,
+      stream: false,
+      format: schema,
+      options: { num_ctx: opts.numCtx ?? 4096, temperature: 0.2 }, // low temperature = steadier, less "creative"
+    }),
+    signal: opts.signal,
+  }).catch(() => {
+    throw new OllamaError("Cannot reach Ollama. Is it running?");
+  });
+  if (!res.ok) throw new OllamaError(`Ollama error ${res.status}: ${await res.text().catch(() => "")}`);
+  const data = (await res.json()) as { message?: { content?: string } };
+  try {
+    return JSON.parse(data.message?.content ?? "");
+  } catch {
+    throw new OllamaError("The AI returned invalid JSON. Try again.");
+  }
+}
