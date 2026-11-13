@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { GmailStatus, Health, VoiceStatus } from "../api";
+import { BriefingSettings } from "../components/BriefingSettings";
 import { Panel } from "../components/Panel";
 
 type Props = {
@@ -90,6 +91,7 @@ export function SettingsView({ health, voice, gmail, voiceReplies, onToggleVoice
           </div>
         )}
       </Panel>
+      <BriefingSettings />
     </div>
   );
 }

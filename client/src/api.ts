@@ -292,3 +292,33 @@ export type ServerEvent =
   | { type: "tasks-changed" };
 export const listRinging = () => request<Task[]>("/api/tasks/ringing");
 export const dismissReminder = (id: number) => request<void>(`/api/tasks/${id}/dismiss`, { method: "POST" });
+
+// ---------- Morning briefing ----------
+export type Briefing = {
+  generatedAt: string;
+  greeting: string;
+  weather: {
+    place: string;
+    temperature: number;
+    feelsLike: number;
+    sky: string;
+    icon: string;
+    high: number;
+    low: number;
+    rainChance: number;
+  } | null;
+  remindersToday: { id: number; text: string; time: string }[];
+  waiting: { id: number; text: string }[];
+  todoCount: number;
+  email: { connected: boolean; unread: number; more: boolean; important: { from: string; subject: string }[] } | null;
+  battery: { percent: number; charging: boolean } | null;
+  problems: string[];
+  speech: string;
+  shouldAutoPlay: boolean;
+};
+export type BriefingSettings = { city: string; place: { name: string; lat: number; lon: number } | null; autoplay: boolean };
+export const getBriefing = () => request<Briefing>("/api/briefing");
+export const markBriefingAutoplayed = () => request<void>("/api/briefing/autoplayed", { method: "POST" });
+export const getBriefingSettings = () => request<BriefingSettings>("/api/briefing/settings");
+export const saveBriefingSettings = (changes: { city?: string; autoplay?: boolean }) =>
+  request<BriefingSettings>("/api/briefing/settings", { method: "PUT", body: JSON.stringify(changes) });

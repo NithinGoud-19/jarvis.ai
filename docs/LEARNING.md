@@ -307,3 +307,38 @@ Browser                     JARVIS backend                     Google
 3. Hard: repeating reminders ("every day at 9 am"). Hint: add a `repeat` column; when a reminder
    fires, instead of leaving it fired, move `due_at` forward by one day and clear `notified_at`.
 4. Open two JARVIS tabs and add a task in one. Why does the other tab update by itself?
+
+---
+
+## V2 · Feature 2 — Morning briefing ☀️
+
+### 1. The flow
+```
+GET /api/briefing
+  ├─ weather   (Open-Meteo, free, cached 15 min) ─┐
+  ├─ email     (Gmail: unread + important)        ├─ Promise.allSettled → one tidy JSON
+  ├─ battery   (PowerShell)                       ┘   (a failed part is skipped, not fatal)
+  └─ tasks     (our own SQLite: instant)
+→ buildSpeech(): plain code turns the facts into sentences → JARVIS speaks them
+```
+
+### 2. New backend concepts
+| Concept | Where | In one line |
+|---|---|---|
+| **Aggregation endpoint** | `services/briefing.ts` | One request gathers data from 5 sources for the page |
+| **Partial failure** | `Promise.allSettled` | No internet? You still get reminders and battery |
+| **In-memory cache** | `integrations/weather.ts` | Reuse an answer for 15 min: faster and polite to a free API |
+| **Key–value settings table** | migration 8, `database/settings.ts` | New settings need no new migration, and defaults live in code |
+| **Validate against the real world** | `PUT /api/briefing/settings` | A city typo is caught when you SAVE, not tomorrow morning |
+| **Server decides "once a day"** | `shouldAutoPlay` + `/autoplayed` | Two tabs or a refresh can't play it twice |
+
+### 3. Design lesson: template vs AI
+The briefing text is built by a **template**, not the AI: it's instant (the AI takes 20–60 s on this
+laptop) and it can never invent an email or a wrong temperature. Rule: **use AI for understanding
+language, use code for facts you already have.**
+
+### 4. Exercises
+1. Add sunrise/sunset to the briefing (Open-Meteo `daily=sunrise,sunset`).
+2. Add "Tomorrow: 31° and rain" in the evening (hint: `forecast_days=2`).
+3. Make the battery sentence appear only when the battery is below 50%.
+4. Why do we store `briefing_last_autoplay` as a LOCAL date ("2026-11-13") and not UTC?

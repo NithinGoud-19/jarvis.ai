@@ -14,6 +14,7 @@ import { openApp, openWebsite, webSearch } from "./apps.js";
 import { listFolder } from "./files.js";
 import { gmailRead, gmailSearch } from "./gmail.js";
 import { jobApply, jobSearch, jobsList, jobUpdateStatus } from "./jobs.js";
+import { dailyBriefing } from "./briefing.js";
 import { taskAdd, taskComplete, taskDelete, tasksList, taskUpdate } from "./tasks.js";
 import { logToolCall } from "../database/toolLogs.js";
 
@@ -37,6 +38,7 @@ const TOOLS: Tool<any>[] = [
   taskComplete,
   taskUpdate,
   taskDelete,
+  dailyBriefing,
 ];
 
 const byName = new Map(TOOLS.map((t) => [t.name, t]));

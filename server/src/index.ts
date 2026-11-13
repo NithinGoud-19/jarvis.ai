@@ -22,6 +22,7 @@ import { systemRouter } from "./routes/system.js";
 import { jobsRouter } from "./routes/jobs.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { eventsRouter } from "./routes/events.js";
+import { briefingRouter } from "./routes/briefing.js";
 import { startReminderScheduler } from "./services/reminders.js";
 
 const app = express();
@@ -54,6 +55,7 @@ app.use("/api/system", systemRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/tasks", tasksRouter);
 app.use("/api/events", eventsRouter);
+app.use("/api/briefing", briefingRouter);
 
 app.use(notFound);
 app.use(errorHandler);

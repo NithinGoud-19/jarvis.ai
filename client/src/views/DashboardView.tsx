@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
 import type { EmailSummary, GmailStatus, Memory, Stats, SystemStats, ToolLog } from "../api";
+import { BriefingCard } from "../components/BriefingCard";
 import { Core, type CoreState } from "../components/Core";
 import { Gauge } from "../components/Gauge";
 import { Panel } from "../components/Panel";
@@ -11,15 +12,17 @@ type Props = {
   gmail: GmailStatus | null;
   /** Bumped when something changes elsewhere (new chat, tool run…) → reload lists */
   refreshKey: number;
+  /** "Speak replies" switch → the ▶ Brief me button speaks or shows text */
+  voiceOn: boolean;
   onCommand: (text: string) => void;
   onOpen: (view: "email" | "activity" | "memory" | "settings") => void;
 };
 
 const QUICK = [
+  { icon: "☀️", text: "Brief me" },
   { icon: "✉", text: "Summarize my unread emails" },
   { icon: "🔋", text: "What's my battery level?" },
   { icon: "💻", text: "Open VS Code" },
-  { icon: "🎵", text: "Search YouTube for Iron Man songs" },
   { icon: "📂", text: "What's in my downloads folder?" },
   { icon: "⏰", text: "Remind me to drink water in 30 minutes" },
 ];
@@ -39,6 +42,7 @@ const TOOL_ICONS: Record<string, string> = {
   task_complete: "✅",
   task_update: "✏",
   task_delete: "🗑",
+  daily_briefing: "☀️",
 };
 
 function greeting(hour: number) {
@@ -156,9 +160,11 @@ export function DashboardView(props: Props) {
             </p>
           </div>
 
-          <Core state={props.coreState} size={210} />
+          <Core state={props.coreState} size={170} />
 
           <p className="text-lg font-light text-slate-200">{greeting(now.getHours())}.</p>
+
+          <BriefingCard active={props.active} refreshKey={props.refreshKey} voiceOn={props.voiceOn} />
 
           <div className="grid w-full max-w-md grid-cols-2 gap-2">
             {QUICK.map((q) => (

@@ -112,8 +112,25 @@ export default function App() {
   useEffect(() => {
     const spoken = new Set<number>(); // reminders this tab already said out loud
 
+    // ☀️ Morning briefing: the first time JARVIS is opened each morning (the SERVER decides
+    // "shouldAutoPlay", so two tabs or a refresh don't play it twice). It already mentions
+    // waiting reminders, so those are marked as spoken to avoid saying them twice.
+    const briefingDone = (async () => {
+      try {
+        const b = await api.getBriefing();
+        if (b.shouldAutoPlay && speakRef.current) {
+          await api.markBriefingAutoplayed();
+          b.waiting.forEach((w) => spoken.add(w.id));
+          announce(b.speech);
+        }
+      } catch {
+        /* no briefing today, reminders still work */
+      }
+    })();
+
     // Reminders that rang while this tab was closed (or the connection was down) → show + say them.
     const loadRinging = async () => {
+      await briefingDone;
       const ringing = await api.listRinging().catch(() => []);
       const alertsNow: ReminderAlert[] = ringing.map((t) => ({
         type: "reminder",
@@ -250,6 +267,7 @@ export default function App() {
               coreState={online ? coreState : "offline"}
               gmail={gmail}
               refreshKey={refreshKey}
+              voiceOn={voiceReplies && Boolean(voice?.textToSpeech)}
               onCommand={runCommand}
               onOpen={go}
             />

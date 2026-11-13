@@ -199,4 +199,18 @@ export const migrations: { id: number; name: string; sql: string }[] = [
     name: "tasks: dismissed_at",
     sql: `ALTER TABLE tasks ADD COLUMN dismissed_at TEXT;`,
   },
+  {
+    // 📘 A KEY–VALUE table: one row per setting ("weather_city" → "Hyderabad").
+    // Adding a new setting later needs NO migration: just a new key. Great for small,
+    // simple settings. (For data you search or join on, real columns are better.)
+    id: 8,
+    name: "settings (key-value)",
+    sql: `
+      CREATE TABLE settings (
+        key         TEXT PRIMARY KEY,
+        value       TEXT NOT NULL,
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `,
+  },
 ];
