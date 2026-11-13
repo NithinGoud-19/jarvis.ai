@@ -48,6 +48,8 @@ export type Facts = {
   expectedCtcLpa: number | null;
   degreeLevel: string; // "Bachelor" / "Master" … (Workday's Degree list)
   fieldOfStudy: string; // "Civil Engineering"
+  school: string; // your college's full name
+  gpa: string; // "65%"
   answers: Record<string, string>;
 };
 
@@ -74,6 +76,8 @@ export function factsFromProfile(p: Profile): Facts {
     expectedCtcLpa: p.expectedCtcLpa ?? null,
     degreeLevel: degreeLevel(degree),
     fieldOfStudy: degree.split(",").slice(1).join(",").trim(),
+    school: String(p.education[0]?.college ?? ""),
+    gpa: String(p.education[0]?.score ?? ""),
     answers: p.answers,
   };
 }
@@ -136,6 +140,8 @@ const RULES: Rule[] = [
   { test: /current (company|employer|organi[sz]ation)|^company$|^organi[sz]ation$/i, answer: (f) => f.currentCompany || null },
   { test: /current (job )?(title|role|designation|position)/i, answer: (f) => f.currentTitle || null },
   { test: /^degree$|highest (level of )?(education|degree)|education level|level of education/i, answer: (f) => f.degreeLevel || null },
+  { test: /school|university|college|institut(e|ion)/i, answer: (f) => f.school || null },
+  { test: /\bc?gpa\b|overall result|grade average|aggregate (marks|score)/i, answer: (f) => f.gpa || null },
   { test: /field of study|\bmajor\b|discipline|speciali[sz]ation/i, answer: (f) => f.fieldOfStudy || null },
   { test: /country/i, answer: (f) => f.country || null },
   { test: /\bstate\b|province|region/i, answer: (f) => [f.state, "N/A"].filter(Boolean) }, // Greenhouse: "not in US/Australia → select N/A"

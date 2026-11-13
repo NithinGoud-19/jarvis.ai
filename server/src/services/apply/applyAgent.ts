@@ -30,6 +30,7 @@ import { loadProfile, RESUME_PATH, type Profile } from "../profile.js";
 import { READ_FORM_FN, READ_VALUES_FN, type FormField } from "./readForm.js";
 import { bestOption, decide, factsFromProfile, questionKey, type Facts } from "./answers.js";
 import { draftAnswer } from "./draft.js";
+import { openUrl } from "../../tools/exec.js";
 
 export type ApplyItem = { question: string; value?: string; reason?: string; remembered?: boolean };
 /** waiting = JARVIS waits for YOU (Workday sign-in). */
@@ -55,6 +56,8 @@ export type ApplySession = {
   /** Workday: the page you are on ("My Information" …) and what JARVIS wants you to do now. */
   step: string | null;
   hint: string | null;
+  /** SmartRecruiters: JARVIS can't drive the form → it opens the job in YOUR browser and gives you a copy sheet. */
+  assist: boolean;
 };
 
 export class ApplyError extends Error {
@@ -81,7 +84,8 @@ export function applyUrl(c: Company, externalId: string): string | null {
     if (!/^\/job\/[\w\-.~%/]+$/.test(externalId)) return null; // "/job/India---Hyderabad/Fullstack-Developer_R-246940"
     return `https://${c.slug}.${c.wd_instance}.myworkdayjobs.com/en-US/${c.wd_site}${externalId}/apply/applyManually`;
   }
-  return null; // SmartRecruiters: blocks automated browsers
+  if (c.ats === "smartrecruiters") return `https://jobs.smartrecruiters.com/${slug}/${id}`;
+  return null;
 }
 
 // ---------- browser (one shared window, opened on first use) ----------
@@ -125,11 +129,6 @@ export function startApply(jobId: number): ApplySession {
   const other = [...sessions.values()].find((s) => busy(s));
   if (other) throw new ApplyError(`Still filling "${other.title}" — wait for it to finish.`, 409);
 
-  if (row.company.ats === "smartrecruiters") {
-    throw new ApplyError(
-      "SmartRecruiters shows a bot check to browsers controlled by a program, so JARVIS can't fill these forms. Open the job link and apply in your normal browser.",
-    );
-  }
   const url = applyUrl(row.company, row.external_id);
   if (!url) throw new ApplyError("JARVIS can't build the application link for this job. Open the job link and apply there.");
   const profile = loadProfile();
@@ -154,8 +153,14 @@ export function startApply(jobId: number): ApplySession {
     done: false,
     step: null,
     hint: null,
+    assist: false,
   };
   sessions.set(jobId, session);
+
+  if (row.company.ats === "smartrecruiters") {
+    startAssist(session, profile);
+    return session;
+  }
 
   // Fire and forget: the work runs in the background; errors are stored on the session.
   const work = row.company.ats === "workday" ? runWorkday : runSinglePage;
@@ -170,6 +175,45 @@ function fail(s: ApplySession, message: string): void {
   s.error = message;
   s.hint = null;
   s.finishedAt = new Date().toISOString();
+}
+
+// ---------- SmartRecruiters: assist mode ----------
+/**
+ * SmartRecruiters shows a bot check to browsers that a program controls. Getting around a site's
+ * bot check isn't something JARVIS does — so here YOU fill the form in your normal browser, and
+ * JARVIS hands you every answer ready to copy (profile facts + your saved answers).
+ */
+function startAssist(s: ApplySession, profile: Profile): void {
+  const f = factsFromProfile(profile);
+  const rows: [string, string | number | null][] = [
+    ["First name", f.first],
+    ["Last name", f.last],
+    ["Email", f.email],
+    ["Phone", f.phone],
+    ["City", `${f.city}, ${f.state}, ${f.country}`],
+    ["LinkedIn", f.linkedin],
+    ["GitHub / website", f.github],
+    ["Current title", f.currentTitle],
+    ["Current company", f.currentCompany],
+    ["Years of experience", f.years],
+    ["Notice period", f.notice],
+    ["Expected CTC", f.expectedCtcLpa === null ? null : `${f.expectedCtcLpa} LPA`],
+    ["College", f.school],
+    ["Degree", profile.education[0]?.degree ?? null],
+    ["Authorized to work in India", f.answers.workAuthorized ?? null],
+    ["Needs visa sponsorship", f.answers.needsSponsorship ?? null],
+    ["Willing to relocate", f.answers.willingToRelocate ?? null],
+    ["OK with hybrid / office", f.answers.hybridOk ?? null],
+  ];
+  s.assist = true;
+  s.filled = rows.filter(([, v]) => v !== null && v !== "").map(([question, v]) => ({ question, value: String(v) }));
+  s.resumeUploaded = false;
+  s.needsYou = [{ question: "Resume", reason: `Upload ${RESUME_PATH}` }];
+  s.state = "ready";
+  s.finishedAt = new Date().toISOString();
+  s.hint = "SmartRecruiters blocks program-controlled browsers, so the job opened in YOUR browser. Click Apply there and copy your answers from the sheet below. Afterwards click ✅ I SUBMITTED IT.";
+  s.log.push("Opened the job in your normal browser (assist mode).");
+  openUrl(s.url).catch((err) => s.log.push(`Couldn't open the browser (${err instanceof Error ? err.message : err}) — use the job link.`));
 }
 
 // ---------- one run = one tab + everything JARVIS needs while filling ----------
@@ -299,12 +343,8 @@ async function runWorkday(s: ApplySession, profile: Profile): Promise<void> {
       s.log.push(`Filling "${step}"…`);
       await page.waitForTimeout(1500); // let Workday finish drawing the page
       await page.evaluate(bannerScript("Check this page, then <b>you</b> click <b>Save and Continue</b>. JARVIS fills the next page."));
+      if (/experience/i.test(step)) await fillWorkdayExperience(run); // before fillPage: it adds new fields
       const drafts = await fillPage(run);
-      if (/experience/i.test(step)) {
-        // Work history uses "Add" + date pickers — not automated yet, so tell you exactly what to enter.
-        const job = profile.experience.find((e) => e.to === null) ?? profile.experience[0];
-        if (job) add(s.needsYou, { question: "Work Experience", reason: `Click "Add" and enter: ${job.title} at ${job.company}, from ${job.from}${job.to ? ` to ${job.to}` : " (I currently work here)"}` });
-      }
       await writeDrafts(run, drafts);
       if (stale(s) || (s.state as ApplyState) === "error") return;
       markAnswersUsed(run.usedKeys);
@@ -318,6 +358,106 @@ async function runWorkday(s: ApplySession, profile: Profile): Promise<void> {
     await page.waitForTimeout(2000).catch(() => {});
   }
 }
+
+/**
+ * Workday "My Experience" → Work Experience. The section starts EMPTY: you click "Add" and a small
+ * form appears (Job Title, Company, Location, "I currently work here", From/To dates, Role Description).
+ * The facts come straight from your profile — no AI — so nothing here can be made up.
+ *
+ * 📘 LESSON: Fail soft
+ * If Workday changes a field, this function doesn't crash the whole run: each part is tried on
+ * its own, and whatever didn't work goes to "needs you" with the exact value to type.
+ */
+async function fillWorkdayExperience(run: Run): Promise<void> {
+  const { s, page, profile } = run;
+  const job = profile.experience.find((e) => e.to === null) ?? profile.experience[0];
+  if (!job) return;
+  const [fromYear, fromMonth] = job.from.split("-"); // "2025-10"
+  const [toYear, toMonth] = (job.to ?? "").split("-");
+  const summary = `${job.title} at ${job.company}, ${job.from} – ${job.to ?? "present"}`;
+  const manual = (part: string, value: string) => add(s.needsYou, { question: `Work Experience: ${part}`, reason: `Enter "${value}"` });
+
+  const section = page.locator('[role="group"][aria-labelledby="Work-Experience-section"]').first();
+  if (!(await section.isVisible().catch(() => false))) return; // this company didn't ask for work history
+  const panel = section.locator('[role="group"][aria-labelledby$="-panel"]').first();
+
+  try {
+    if (!(await panel.isVisible().catch(() => false))) {
+      const addBtn = section.locator('[data-automation-id="add-button"]').first();
+      // 🔒 Only a button that says exactly "Add". Workday leaves out type= (like Ashby), so we set
+      // type="button" first: then even inside a <form> the click can never submit anything.
+      const isAdd = await addBtn.evaluate((b) => /^add$/i.test((b.textContent ?? "").trim()));
+      if (!isAdd) throw new Error("no Add button");
+      await addBtn.evaluate((b) => b.setAttribute("type", "button"));
+      await addBtn.click({ timeout: 5000 });
+      await panel.waitFor({ timeout: 6000 });
+      await page.waitForTimeout(800);
+    }
+  } catch {
+    add(s.needsYou, { question: "Work Experience", reason: `Click "Add" and enter: ${summary}` });
+    return;
+  }
+
+  // Workday names each input: name="jobTitle", id="workExperience-12--jobTitle".
+  const input = (name: string) => panel.locator(`input[name="${name}"], textarea[name="${name}"], [id$="--${name}"]`).first();
+  const typeIfEmpty = async (name: string, label: string, value: string) => {
+    if (!value) return;
+    try {
+      const loc = input(name);
+      if (!(await loc.isVisible())) return; // this company doesn't have that field
+      if ((await loc.inputValue()).trim()) return; // you (or Workday's resume parser) already wrote something
+      await loc.fill(value, { timeout: 4000 });
+      await loc.blur().catch(() => {});
+    } catch {
+      manual(label, value);
+    }
+  };
+
+  await typeIfEmpty("jobTitle", "Job Title", job.title);
+  await typeIfEmpty("companyName", "Company", job.company);
+  await typeIfEmpty("location", "Location", profile.city);
+
+  if (job.to === null) {
+    try {
+      const box = input("currentlyWorkHere");
+      if ((await box.isVisible()) && !(await box.isChecked())) await box.check({ force: true, timeout: 3000 });
+    } catch {
+      manual("I currently work here", "tick it");
+    }
+  }
+  await typeDate(page, panel, "startDate", fromMonth, fromYear).catch(() => manual("From", `${fromMonth}/${fromYear}`));
+  if (job.to) await typeDate(page, panel, "endDate", toMonth, toYear).catch(() => manual("To", `${toMonth}/${toYear}`));
+  await typeIfEmpty("roleDescription", "Role Description", job.points.map((p) => `• ${p}`).join("\n").slice(0, 2000));
+
+  add(s.filled, { question: "Work Experience", value: summary });
+  await panel.evaluate((el) => el.setAttribute("data-jarvis-state", "filled")).catch(() => {});
+  s.log.push(`Work experience added: ${summary}.`);
+}
+
+/**
+ * Workday dates are two little boxes, MM and YYYY (role="spinbutton"). They react to KEY PRESSES,
+ * not .fill() — so click the month box and type; Workday jumps to the year box by itself.
+ * Then we read both boxes back and throw if the date didn't stick (→ "needs you").
+ */
+async function typeDate(page: Page, panel: Locator, field: "startDate" | "endDate", month: string, year: string): Promise<void> {
+  if (!month || !year) throw new Error("no date");
+  const wrap = panel.locator(`[data-automation-id="formField-${field}"]`).first();
+  const mm = wrap.locator('[data-automation-id="dateSectionMonth-input"]').first();
+  const yyyy = wrap.locator('[data-automation-id="dateSectionYear-input"]').first();
+  if (!(await mm.isVisible())) throw new Error("no date boxes");
+  const read = async (l: Locator) => (await l.getAttribute("aria-valuenow")) || (await l.inputValue().catch(() => ""));
+  if (Number(await read(mm)) === Number(month) && Number(await read(yyyy)) === Number(year)) return; // already right
+  await mm.click({ timeout: 3000 });
+  await page.keyboard.type(month.padStart(2, "0"), { delay: 80 });
+  await yyyy.click({ timeout: 3000 });
+  await page.keyboard.type(year, { delay: 80 });
+  await yyyy.blur().catch(() => {});
+  await page.waitForTimeout(300);
+  if (Number(await read(mm)) !== Number(month) || Number(await read(yyyy)) !== Number(year)) throw new Error("date didn't stick");
+}
+
+/** Work-history inputs belong to fillWorkdayExperience — the general rules must not touch or learn them. */
+const WORK_HISTORY = /workExperience|dateSection(Month|Day|Year)-input|currentlyWorkHere|roleDescription|\bjobTitle\b/i;
 
 // ---------- filling one page (shared by all ATS) ----------
 /** Adds an item, replacing an older one for the same question (you may visit a Workday page twice). */
@@ -371,6 +511,7 @@ async function handleField(run: Run, field: FormField, drafts: FormField[]): Pro
   const { s, page } = run;
   const firstRef = field.options?.[0]?.ref ?? field.ref;
   if (stale(s)) return false; // "Fill again" started a new session → this old run stops touching things
+  if (WORK_HISTORY.test(field.idHint ?? "")) return false; // fillWorkdayExperience already handled (and reported) it
   try {
     if (field.kind === "file") return await uploadResume(run, field);
     if (field.kind === "listbox" && !field.options?.length) field.options = await listboxOptions(page, field);

@@ -93,6 +93,12 @@ export const jobApply = defineTool({
   run: async ({ id }) => {
     try {
       const s = startApply(id);
+      if (s.assist) {
+        return (
+          `"${s.title}" at ${s.company} is on SmartRecruiters, which blocks program-controlled browsers. ` +
+          "The job opened in the user's normal browser; their answers are ready to copy in the Jobs page. They fill and submit it themselves."
+        );
+      }
       return (
         `Started filling the application for "${s.title}" at ${s.company}. A browser window is opening; progress is shown in the Jobs page. ` +
         "Tell the user: when it's done, check every field (green = filled, blue = AI draft, orange = needs you) and click Submit themselves."

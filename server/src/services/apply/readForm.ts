@@ -167,7 +167,7 @@ export const READ_FORM_FN = String.raw`(start) => {
       const key = (type === "checkbox" ? groupQuestion(el) : "") || el.name || groupQuestion(el) || "g" + n;
       let g = groups.get(key);
       if (!g) {
-        g = { ref: "g" + n++, kind: type, question: groupQuestion(el), required, options: [] };
+        g = { ref: "g" + n++, kind: type, question: groupQuestion(el), required, options: [], idHint: clean((el.id || "") + " " + (el.name || "") + " " + aid(el)) };
         groups.set(key, g);
         out.push(g);
       }

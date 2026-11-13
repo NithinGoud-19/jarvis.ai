@@ -446,9 +446,11 @@ function SavedAnswersPanel() {
 
 // ---------- apply (form-filler) UI ----------
 
-const BUSY: api.ApplySession["state"][] = ["opening", "filling", "drafting"];
+// "waiting" counts as busy: the UI keeps polling so it sees the moment you finish signing in.
+const BUSY: api.ApplySession["state"][] = ["opening", "waiting", "filling", "drafting"];
 const STATE_TEXT: Record<api.ApplySession["state"], string> = {
   opening: "Opening the form…",
+  waiting: "Waiting for you to sign in",
   filling: "Filling fields…",
   drafting: "AI is drafting answers…",
   ready: "Filled — your turn in the browser",
@@ -464,8 +466,22 @@ function ApplyPanel({ job, onApplied }: { job: Job; onApplied: (job: Job) => voi
   const [error, setError] = useState<string | null>(null);
   const [learned, setLearned] = useState<api.ApplyItem[] | null>(null);
   const busy = !!session && BUSY.includes(session.state);
-  // While the filled form is open, keep refreshing so you can see what JARVIS will remember.
+  // While the filled form is open, keep refreshing so you can see what JARVIS will remember
+  // (and, on Workday, notice when you move to the next page).
   const watching = !!session && session.state === "ready" && !session.done;
+  // Workday: "I submitted it" only on the Review page — between pages you haven't submitted anything yet.
+  const canFinish = !!session && session.state === "ready" && !session.done && (session.assist || !session.step || session.step === "Review");
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(text);
+      setTimeout(() => setCopied((c) => (c === text ? null : c)), 1500);
+    } catch {
+      setError("Couldn't copy — select the text and press Ctrl+C.");
+    }
+  }
 
   useEffect(() => {
     if (!watching) return;
@@ -530,17 +546,23 @@ function ApplyPanel({ job, onApplied }: { job: Job; onApplied: (job: Job) => voi
             {session ? "↻ FILL AGAIN" : "📝 FILL APPLICATION"}
           </button>
         )}
-        {session?.state === "ready" && !session.done && (
+        {canFinish && (
           <button onClick={submitted} className={`${button} border-emerald-400/50 text-emerald-300`}>
             ✅ I SUBMITTED IT
           </button>
         )}
         <span className="text-[11px] text-slate-500">
           {session
-            ? `${STATE_TEXT[session.state]}${busy ? ` · ${session.log.at(-1) ?? ""}` : ""}`
+            ? session.assist && session.state === "ready"
+              ? "Assist mode — fill it in your browser"
+              : `${STATE_TEXT[session.state]}${session.step ? ` · ${session.step}` : ""}${busy ? ` · ${session.log.at(-1) ?? ""}` : ""}`
             : "JARVIS opens the form in Edge, fills it and uploads your resume. It never submits — you do."}
         </span>
       </div>
+
+      {session?.hint && !session.done && (
+        <p className="rounded-md border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-amber-200">👉 {session.hint}</p>
+      )}
 
       {session?.error && <p className="text-red-400">⚠ {session.error}</p>}
       {error && <p className="text-red-400">⚠ {error}</p>}
@@ -553,7 +575,28 @@ function ApplyPanel({ job, onApplied }: { job: Job; onApplied: (job: Job) => voi
         </p>
       )}
 
-      {session && !busy && session.state === "ready" && !session.done && (
+      {session?.assist && session.state === "ready" && !session.done && (
+        <div className="rounded-md border border-jarvis-cyan/15 bg-black/30 p-3">
+          <p className="mb-2 text-slate-200">📋 Your answers — click one to copy it, then paste it into the form.</p>
+          <ul className="grid gap-1 sm:grid-cols-2">
+            {[...session.filled, ...session.needsYou.map((i) => ({ question: i.question, value: i.reason?.replace(/^Upload /, "") }))].map((i) => (
+              <li key={i.question}>
+                <button
+                  onClick={() => i.value && copy(i.value)}
+                  className="w-full rounded px-2 py-1 text-left hover:bg-jarvis-cyan/10"
+                  title="Copy"
+                >
+                  <span className="text-slate-500">{i.question}: </span>
+                  <span className="text-slate-200">{i.value}</span>
+                  {copied === i.value && <span className="ml-2 text-emerald-300">✓ copied</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {session && !session.assist && !busy && session.state === "ready" && !session.done && (
         <div className="rounded-md border border-jarvis-cyan/15 bg-black/30 p-3">
           <p className="mb-2 text-slate-200">
             Filled <b className="text-emerald-300">{session.filled.length}</b> fields

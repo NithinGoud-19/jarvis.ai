@@ -157,7 +157,8 @@ export type ApplySession = {
   title: string;
   company: string;
   url: string;
-  state: "opening" | "filling" | "drafting" | "ready" | "error";
+  /** waiting = JARVIS waits for YOU (Workday sign-in). */
+  state: "opening" | "waiting" | "filling" | "drafting" | "ready" | "error";
   startedAt: string;
   finishedAt: string | null;
   log: string[];
@@ -169,6 +170,11 @@ export type ApplySession = {
   error: string | null;
   learning: ApplyItem[];
   done: boolean;
+  /** Workday: the page you are on ("My Information" …) and what JARVIS wants you to do now. */
+  step: string | null;
+  hint: string | null;
+  /** SmartRecruiters: the job opened in your own browser; `filled` is a copy sheet. */
+  assist: boolean;
 };
 export type SavedAnswer = { id: number; question: string; answer: string; uses: number; updated_at: string };
 export const finishApply = (id: number) =>
