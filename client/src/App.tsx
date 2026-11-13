@@ -13,6 +13,7 @@ import type { GmailStatus, Health, ServerEvent, VoiceStatus } from "./api";
 import type { CoreState } from "./components/Core";
 import { NavRail, type View } from "./components/NavRail";
 import { ReminderAlerts, type ReminderAlert } from "./components/ReminderAlerts";
+import { announce, onBlockedChange } from "./lib/announcer";
 import { ActivityView } from "./views/ActivityView";
 import { ChatView } from "./views/ChatView";
 import { DashboardView } from "./views/DashboardView";
@@ -70,8 +71,11 @@ export default function App() {
 
   // The event handler below is created ONCE, so it reads the latest voice settings through a ref
   // (📘 a ref = a box whose content can change without re-running effects)
-  const speakRef = useRef(false);
-  speakRef.current = voiceReplies && Boolean(voice?.textToSpeech);
+  // (If the voice engine is missing, announce() just fails quietly → banner + Windows pop-up still show.)
+  const speakRef = useRef(voiceReplies);
+  speakRef.current = voiceReplies;
+  const [soundBlocked, setSoundBlocked] = useState(false);
+  useEffect(() => onBlockedChange(setSoundBlocked), []);
 
   const go = (v: View) => {
     window.location.hash = `/${v}`;
@@ -106,14 +110,40 @@ export default function App() {
   // 📘 Live events from the server (Server-Sent Events). EventSource reconnects by itself
   // if the server restarts, so reminders keep arriving.
   useEffect(() => {
+    const spoken = new Set<number>(); // reminders this tab already said out loud
+
+    // Reminders that rang while this tab was closed (or the connection was down) → show + say them.
+    const loadRinging = async () => {
+      const ringing = await api.listRinging().catch(() => []);
+      const alertsNow: ReminderAlert[] = ringing.map((t) => ({
+        type: "reminder",
+        task: { id: t.id, text: t.text, due_at: t.due_at },
+        missed: Boolean(t.due_at && t.notified_at && api.sqliteDate(t.notified_at).getTime() - api.sqliteDate(t.due_at).getTime() > 120_000),
+      }));
+      setAlerts(alertsNow);
+      const unspoken = ringing.filter((t) => !spoken.has(t.id));
+      unspoken.forEach((t) => spoken.add(t.id));
+      if (unspoken.length && speakRef.current) {
+        const list = unspoken.map((t) => t.text).join(", and ");
+        announce(unspoken.length === 1 ? `Sir, a reminder: ${list}` : `Sir, you have ${unspoken.length} reminders: ${list}`);
+      }
+    };
+
     const events = new EventSource("/api/events");
+    // onopen runs on the first connect AND after every reconnect (e.g. the server restarted)
+    events.onopen = () => void loadRinging();
     events.onmessage = (e) => {
       const event = JSON.parse(e.data) as ServerEvent;
       if (event.type === "reminder") {
         setAlerts((list) => [...list.filter((a) => a.task.id !== event.task.id), event]);
-        if (speakRef.current) sayOutLoud(`${event.missed ? "Sir, you missed a reminder" : "Sir, a reminder"}: ${event.task.text}`);
+        if (!spoken.has(event.task.id) && speakRef.current) {
+          announce(`${event.missed ? "Sir, you missed a reminder" : "Sir, a reminder"}: ${event.task.text}`);
+        }
+        spoken.add(event.task.id);
       }
-      setRefreshKey((k) => k + 1); // lists (Tasks page, Dashboard) reload
+      // Something changed (done in chat, dismissed in another tab…) → banners + lists reload
+      if (event.type === "tasks-changed") void loadRinging();
+      setRefreshKey((k) => k + 1);
     };
     return () => events.close();
   }, []);
@@ -191,6 +221,9 @@ export default function App() {
             </button>
           </div>
         )}
+        {soundBlocked && alerts.length > 0 && (
+          <div className="px-5 pt-3 text-xs text-amber-300/80">🔊 Click anywhere on the page to hear your reminders (the browser blocks sound until you click once).</div>
+        )}
         <ReminderAlerts alerts={alerts} onClose={(id) => setAlerts((list) => list.filter((a) => a.task.id !== id))} />
         {health && !online && (
           <div className="bg-amber-500/10 px-5 py-2 text-sm text-amber-300">
@@ -240,16 +273,4 @@ export default function App() {
       </div>
     </div>
   );
-}
-
-/** Speaks a short text with JARVIS's voice (Piper). Silent if the browser blocks audio. */
-async function sayOutLoud(text: string) {
-  try {
-    const url = URL.createObjectURL(await api.speak(text));
-    const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    await audio.play();
-  } catch {
-    /* voice not available or autoplay blocked; the banner + Windows pop-up still show */
-  }
 }

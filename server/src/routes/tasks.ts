@@ -4,6 +4,8 @@
  *   PATCH  /api/tasks/:id                 → change   body: { text?, when?, done? }
  *   POST   /api/tasks/:id/snooze          → remind again later  body: { minutes }
  *   DELETE /api/tasks/:id                 → delete   (204)
+ *   GET    /api/tasks/ringing             → reminders that rang and still need your attention
+ *   POST   /api/tasks/:id/dismiss         → close a ringing reminder's banner (204)
  *
  * 📘 LESSON: PATCH vs PUT
  * PUT = "replace the whole thing". PATCH = "change only the fields I send".
@@ -15,8 +17,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { idParam } from "./params.js";
-import { listTasks } from "../database/tasks.js";
-import { completeTask, createTask, editTask, removeTask, snoozeTask } from "../services/tasks.js";
+import { listRinging, listTasks } from "../database/tasks.js";
+import { completeTask, createTask, dismissReminder, editTask, removeTask, snoozeTask } from "../services/tasks.js";
 
 export const tasksRouter = Router();
 
@@ -24,6 +26,19 @@ const showSchema = z.enum(["open", "done", "all"]).catch("open");
 
 tasksRouter.get("/", (req, res) => {
   res.json(listTasks(showSchema.parse(req.query.show)));
+});
+
+// 📘 Route ORDER matters: "/ringing" must be defined before any "/:id" GET, or Express would
+// treat the word "ringing" as an id. (We have no GET "/:id", but it's a good habit.)
+tasksRouter.get("/ringing", (_req, res) => {
+  res.json(listRinging());
+});
+
+tasksRouter.post("/:id/dismiss", (req, res) => {
+  const id = idParam.safeParse(req.params.id);
+  if (!id.success) return void res.status(400).json({ error: "Invalid id" });
+  dismissReminder(id.data);
+  res.status(204).end();
 });
 
 const text = z.string().trim().min(1).max(300);

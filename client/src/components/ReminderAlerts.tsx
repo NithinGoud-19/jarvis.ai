@@ -39,7 +39,11 @@ export function ReminderAlerts({ alerts, onClose }: { alerts: ReminderAlert[]; o
           >
             Snooze 10m
           </button>
-          <button onClick={() => onClose(task.id)} className="text-xs text-slate-400 hover:text-slate-200" title="Hide (keeps the task)">
+          <button
+            onClick={() => act(task.id, () => api.dismissReminder(task.id))}
+            className="text-xs text-slate-400 hover:text-slate-200"
+            title="Hide (keeps the task)"
+          >
             ✕
           </button>
         </div>

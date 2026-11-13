@@ -15,6 +15,7 @@ export type Task = {
   due_at: string | null; // UTC "YYYY-MM-DD HH:MM:SS"
   done: boolean;
   notified_at: string | null;
+  dismissed_at: string | null;
   created_at: string;
   completed_at: string | null;
 };
@@ -69,12 +70,25 @@ export function setTaskDone(id: number, done: boolean): Task | undefined {
 export function updateTask(id: number, changes: { text?: string; due?: Date | null }): Task | undefined {
   if (changes.text !== undefined) db.prepare("UPDATE tasks SET text = ? WHERE id = ?").run(changes.text, id);
   if (changes.due !== undefined) {
-    db.prepare("UPDATE tasks SET due_at = ?, notified_at = NULL WHERE id = ?").run(
+    db.prepare("UPDATE tasks SET due_at = ?, notified_at = NULL, dismissed_at = NULL WHERE id = ?").run(
       changes.due ? toSqlTime(changes.due) : null,
       id,
     );
   }
   return getTask(id);
+}
+
+/** Reminders that rang but you haven't dealt with yet (not done, banner not closed). */
+export function listRinging(): Task[] {
+  return (
+    db
+      .prepare("SELECT * FROM tasks WHERE done = 0 AND notified_at IS NOT NULL AND dismissed_at IS NULL ORDER BY due_at")
+      .all() as TaskRow[]
+  ).map(toTask);
+}
+
+export function dismissTask(id: number): boolean {
+  return db.prepare("UPDATE tasks SET dismissed_at = datetime('now') WHERE id = ?").run(id).changes > 0;
 }
 
 export function deleteTask(id: number): boolean {

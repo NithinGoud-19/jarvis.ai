@@ -9,7 +9,7 @@
  * Errors are thrown as TaskError with a message written for HUMANS, because it is
  * shown as-is on the Tasks page and read out by JARVIS in the chat.
  */
-import { addTask, deleteTask, findOpenTasks, getTask, setTaskDone, updateTask, type Task } from "../database/tasks.js";
+import { addTask, deleteTask, dismissTask, findOpenTasks, getTask, setTaskDone, updateTask, type Task } from "../database/tasks.js";
 import { broadcast } from "./events.js";
 import { parseWhen } from "./timeParse.js";
 
@@ -62,6 +62,12 @@ export function completeTask(id: number, done = true): Task {
   const task = setTaskDone(id, done)!;
   broadcast({ type: "tasks-changed" });
   return task;
+}
+
+/** Close a ringing reminder's banner (the task itself stays). */
+export function dismissReminder(id: number): void {
+  if (!dismissTask(id)) throw new TaskError(`There is no task #${id}.`, 404);
+  broadcast({ type: "tasks-changed" });
 }
 
 export function removeTask(id: number): void {

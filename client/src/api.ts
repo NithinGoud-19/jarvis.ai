@@ -272,6 +272,7 @@ export type Task = {
   due_at: string | null; // UTC from SQLite → use sqliteDate()
   done: boolean;
   notified_at: string | null;
+  dismissed_at: string | null;
   created_at: string;
   completed_at: string | null;
 };
@@ -289,3 +290,5 @@ export const deleteTask = (id: number) => request<void>(`/api/tasks/${id}`, { me
 export type ServerEvent =
   | { type: "reminder"; task: Pick<Task, "id" | "text" | "due_at">; missed: boolean }
   | { type: "tasks-changed" };
+export const listRinging = () => request<Task[]>("/api/tasks/ringing");
+export const dismissReminder = (id: number) => request<void>(`/api/tasks/${id}/dismiss`, { method: "POST" });

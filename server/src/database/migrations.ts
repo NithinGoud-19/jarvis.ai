@@ -191,4 +191,12 @@ export const migrations: { id: number; name: string; sql: string }[] = [
         WHERE done = 0 AND due_at IS NOT NULL AND notified_at IS NULL;
     `,
   },
+  {
+    // 📘 A reminder that rang while no JARVIS tab was open must still be shown (and spoken)
+    // when you open JARVIS later. "Ringing" = rang, not done, not dismissed yet.
+    // dismissed_at is set when you close its banner (✕).
+    id: 7,
+    name: "tasks: dismissed_at",
+    sql: `ALTER TABLE tasks ADD COLUMN dismissed_at TEXT;`,
+  },
 ];
