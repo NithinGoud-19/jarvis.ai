@@ -7,11 +7,12 @@
  * The Chat page stays MOUNTED (just hidden) when you visit other pages, so a reply that
  * is still streaming — or JARVIS talking — is not interrupted.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "./api";
-import type { GmailStatus, Health, VoiceStatus } from "./api";
+import type { GmailStatus, Health, ServerEvent, VoiceStatus } from "./api";
 import type { CoreState } from "./components/Core";
 import { NavRail, type View } from "./components/NavRail";
+import { ReminderAlerts, type ReminderAlert } from "./components/ReminderAlerts";
 import { ActivityView } from "./views/ActivityView";
 import { ChatView } from "./views/ChatView";
 import { DashboardView } from "./views/DashboardView";
@@ -19,11 +20,13 @@ import { EmailView } from "./views/EmailView";
 import { JobsView } from "./views/JobsView";
 import { MemoryView } from "./views/MemoryView";
 import { SettingsView } from "./views/SettingsView";
+import { TasksView } from "./views/TasksView";
 
-const VIEWS: View[] = ["dashboard", "chat", "email", "jobs", "activity", "memory", "settings"];
+const VIEWS: View[] = ["dashboard", "chat", "tasks", "email", "jobs", "activity", "memory", "settings"];
 const TITLES: Record<View, string> = {
   dashboard: "COMMAND CENTER",
   chat: "CONVERSATION",
+  tasks: "TASKS & REMINDERS",
   email: "COMMUNICATIONS",
   jobs: "JOB OPERATIONS",
   activity: "ACTIVITY LOG",
@@ -63,6 +66,12 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [now, setNow] = useState(new Date());
   const [banner, setBanner] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const [alerts, setAlerts] = useState<ReminderAlert[]>([]);
+
+  // The event handler below is created ONCE, so it reads the latest voice settings through a ref
+  // (📘 a ref = a box whose content can change without re-running effects)
+  const speakRef = useRef(false);
+  speakRef.current = voiceReplies && Boolean(voice?.textToSpeech);
 
   const go = (v: View) => {
     window.location.hash = `/${v}`;
@@ -92,6 +101,21 @@ export default function App() {
     }
     if (params.has("gmail")) window.history.replaceState(null, "", "/#/settings");
     return () => clearInterval(t);
+  }, []);
+
+  // 📘 Live events from the server (Server-Sent Events). EventSource reconnects by itself
+  // if the server restarts, so reminders keep arriving.
+  useEffect(() => {
+    const events = new EventSource("/api/events");
+    events.onmessage = (e) => {
+      const event = JSON.parse(e.data) as ServerEvent;
+      if (event.type === "reminder") {
+        setAlerts((list) => [...list.filter((a) => a.task.id !== event.task.id), event]);
+        if (speakRef.current) sayOutLoud(`${event.missed ? "Sir, you missed a reminder" : "Sir, a reminder"}: ${event.task.text}`);
+      }
+      setRefreshKey((k) => k + 1); // lists (Tasks page, Dashboard) reload
+    };
+    return () => events.close();
   }, []);
 
   useEffect(() => {
@@ -167,6 +191,7 @@ export default function App() {
             </button>
           </div>
         )}
+        <ReminderAlerts alerts={alerts} onClose={(id) => setAlerts((list) => list.filter((a) => a.task.id !== id))} />
         {health && !online && (
           <div className="bg-amber-500/10 px-5 py-2 text-sm text-amber-300">
             ⚠ {health.ollamaRunning ? `Model ${health.model} is not downloaded.` : "Ollama is not running — open Ollama from the Start menu."}
@@ -196,6 +221,7 @@ export default function App() {
               onOpen={go}
             />
           )}
+          {view === "tasks" && <TasksView active refreshKey={refreshKey} />}
           {view === "email" && <EmailView active gmail={gmail} onCommand={runCommand} onOpenSettings={() => go("settings")} />}
           {view === "jobs" && <JobsView active />}
           {view === "activity" && <ActivityView active refreshKey={refreshKey} />}
@@ -214,4 +240,16 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+/** Speaks a short text with JARVIS's voice (Piper). Silent if the browser blocks audio. */
+async function sayOutLoud(text: string) {
+  try {
+    const url = URL.createObjectURL(await api.speak(text));
+    const audio = new Audio(url);
+    audio.onended = () => URL.revokeObjectURL(url);
+    await audio.play();
+  } catch {
+    /* voice not available or autoplay blocked; the banner + Windows pop-up still show */
+  }
 }

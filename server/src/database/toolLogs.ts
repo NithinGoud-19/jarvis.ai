@@ -32,6 +32,11 @@ export function logToolCall(entry: {
   );
 }
 
+/** Every tool call made inside one conversation, oldest first (to rebuild the chat history). */
+export function listToolLogsForConversation(conversationId: number): ToolLog[] {
+  return db.prepare("SELECT * FROM tool_logs WHERE conversation_id = ? ORDER BY id").all(conversationId) as ToolLog[];
+}
+
 export function listToolLogs(limit = 50): ToolLog[] {
   return db.prepare("SELECT * FROM tool_logs ORDER BY id DESC LIMIT ?").all(limit) as ToolLog[];
 }

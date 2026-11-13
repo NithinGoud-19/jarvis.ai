@@ -264,3 +264,28 @@ export async function streamChat(
     }
   }
 }
+
+// ---------- Tasks & reminders ----------
+export type Task = {
+  id: number;
+  text: string;
+  due_at: string | null; // UTC from SQLite → use sqliteDate()
+  done: boolean;
+  notified_at: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+export type TaskFilter = "open" | "done" | "all";
+export const listTasks = (show: TaskFilter = "open") => request<Task[]>(`/api/tasks?show=${show}`);
+export const addTask = (text: string, when?: string) =>
+  request<Task>("/api/tasks", { method: "POST", body: JSON.stringify({ text, when: when || undefined }) });
+export const updateTask = (id: number, changes: { text?: string; when?: string | null; done?: boolean }) =>
+  request<Task>(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(changes) });
+export const snoozeTask = (id: number, minutes: number) =>
+  request<Task>(`/api/tasks/${id}/snooze`, { method: "POST", body: JSON.stringify({ minutes }) });
+export const deleteTask = (id: number) => request<void>(`/api/tasks/${id}`, { method: "DELETE" });
+
+/** Live messages the server pushes (GET /api/events, Server-Sent Events). */
+export type ServerEvent =
+  | { type: "reminder"; task: Pick<Task, "id" | "text" | "due_at">; missed: boolean }
+  | { type: "tasks-changed" };

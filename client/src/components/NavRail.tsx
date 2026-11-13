@@ -1,8 +1,9 @@
-export type View = "dashboard" | "chat" | "email" | "jobs" | "activity" | "memory" | "settings";
+export type View = "dashboard" | "chat" | "tasks" | "email" | "jobs" | "activity" | "memory" | "settings";
 
 const ITEMS: { id: View; icon: string; label: string }[] = [
   { id: "dashboard", icon: "◉", label: "Dashboard" },
   { id: "chat", icon: "💬", label: "Chat" },
+  { id: "tasks", icon: "⏰", label: "Tasks" },
   { id: "email", icon: "✉", label: "Email" },
   { id: "jobs", icon: "💼", label: "Jobs" },
   { id: "activity", icon: "⚡", label: "Activity" },

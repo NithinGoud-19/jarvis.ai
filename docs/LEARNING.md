@@ -266,3 +266,44 @@ Browser                     JARVIS backend                     Google
 4. **Challenge:** add a tool `gmail_count_unread` that returns just the number of unread emails.
    Hint: `searchEmails("is:unread", 10)` gives a list — or look up the Gmail API `labels/UNREAD` endpoint
    (`messagesUnread` field).
+
+---
+
+## V2 · Feature 1 — Reminders & to-do list ⏰
+
+### 1. The flow
+```
+"Remind me to call mom at 6 pm"
+   → AI calls task_add { text: "call mom", when: "at 6 pm" }   (copies your words, no maths)
+   → services/timeParse.ts (chrono-node) → 6:00 pm today       (CODE does the date maths)
+   → tasks table (due_at in UTC)
+   → scheduler checks every 15 s: due_at <= datetime('now') ?
+   → Windows pop-up (PowerShell toast) + SSE event → banner + JARVIS speaks it
+```
+
+### 2. New backend concepts
+| Concept | Where | In one line |
+|---|---|---|
+| **Background job / scheduler** | `services/reminders.ts` | Code that runs because TIME passed, not because a request came |
+| **Server-Sent Events (SSE)** | `services/events.ts`, `routes/events.ts` | One long GET request the server keeps writing to → live push to the browser |
+| **Service layer** | `services/tasks.ts` | Rules live in ONE place, used by both the REST routes and the AI tools |
+| **Store UTC, show local** | `database/tasks.ts` | Comparing times stays a simple SQL condition |
+| **Partial index** | migration 6 | An index with a WHERE: only rows the scheduler needs |
+| **Atomic "take"** | `takeDueReminders()` | Select + mark as fired in one transaction → never fires twice |
+| **PATCH** | `PATCH /api/tasks/:id` | Change only the fields you send |
+| **Idempotency** | `routes/chat.ts` | The same tool call twice in one message runs only once |
+
+### 3. Two AI lessons learned while testing 🐛
+1. **The small model repeated `task_add`** → two identical reminders. Fix: the agent loop remembers
+   which exact calls it already ran in this message and returns the old result instead.
+2. **The model said "Added ✓" WITHOUT calling the tool.** Why? The history only stored the
+   WORDS of past replies, so it looked like JARVIS had just *said* "done" before. Fix: `buildHistory()`
+   puts the tool calls back (from the `tool_logs` audit table) between each question and answer.
+   Lesson: **an AI copies the patterns it sees in its history, so show it the whole truth.**
+
+### 4. Exercises
+1. Add a `GET /api/tasks/upcoming` route that returns only reminders due in the next 24 hours.
+2. Change "Snooze 10m" to offer 5 / 10 / 30 minutes.
+3. Hard: repeating reminders ("every day at 9 am"). Hint: add a `repeat` column; when a reminder
+   fires, instead of leaving it fired, move `due_at` forward by one day and clear `notified_at`.
+4. Open two JARVIS tabs and add a task in one. Why does the other tab update by itself?

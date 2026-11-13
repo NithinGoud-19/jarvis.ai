@@ -168,4 +168,27 @@ export const migrations: { id: number; name: string; sql: string }[] = [
       );
     `,
   },
+  {
+    // 📘 ONE table for to-dos AND reminders: a reminder is just a to-do with a time (due_at).
+    //   due_at       NULL = plain to-do. Stored in UTC like datetime('now'), so the scheduler can
+    //                simply ask SQLite "due_at <= datetime('now')".
+    //   notified_at  set when the reminder fired → it never fires twice. Snooze clears it again.
+    //   done         0/1 (SQLite has no boolean type)
+    // The "partial index" (WHERE ...) only contains rows the scheduler cares about → tiny and fast.
+    id: 6,
+    name: "tasks and reminders",
+    sql: `
+      CREATE TABLE tasks (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        text          TEXT    NOT NULL,
+        due_at        TEXT,
+        done          INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)),
+        notified_at   TEXT,
+        created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        completed_at  TEXT
+      );
+      CREATE INDEX idx_tasks_pending_reminders ON tasks(due_at)
+        WHERE done = 0 AND due_at IS NOT NULL AND notified_at IS NULL;
+    `,
+  },
 ];

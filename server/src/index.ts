@@ -20,6 +20,9 @@ import { voiceRouter } from "./routes/voice.js";
 import { gmailRouter } from "./routes/gmail.js";
 import { systemRouter } from "./routes/system.js";
 import { jobsRouter } from "./routes/jobs.js";
+import { tasksRouter } from "./routes/tasks.js";
+import { eventsRouter } from "./routes/events.js";
+import { startReminderScheduler } from "./services/reminders.js";
 
 const app = express();
 
@@ -49,6 +52,8 @@ app.use("/api/voice", voiceRouter);
 app.use("/api/gmail", gmailRouter);
 app.use("/api/system", systemRouter);
 app.use("/api/jobs", jobsRouter);
+app.use("/api/tasks", tasksRouter);
+app.use("/api/events", eventsRouter);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -57,4 +62,5 @@ app.use(errorHandler);
 app.listen(config.port, "127.0.0.1", () => {
   console.log(`🤖 JARVIS server running at http://localhost:${config.port}`);
   console.log(`   Model: ${config.ollamaModel} via ${config.ollamaUrl}`);
+  startReminderScheduler(); // 📘 background job: starts once the server is ready
 });

@@ -21,7 +21,7 @@ const QUICK = [
   { icon: "💻", text: "Open VS Code" },
   { icon: "🎵", text: "Search YouTube for Iron Man songs" },
   { icon: "📂", text: "What's in my downloads folder?" },
-  { icon: "🕒", text: "What time is it?" },
+  { icon: "⏰", text: "Remind me to drink water in 30 minutes" },
 ];
 
 const TOOL_ICONS: Record<string, string> = {
@@ -34,6 +34,11 @@ const TOOL_ICONS: Record<string, string> = {
   list_folder: "📂",
   gmail_search: "✉",
   gmail_read: "📨",
+  task_add: "⏰",
+  tasks_list: "📋",
+  task_complete: "✅",
+  task_update: "✏",
+  task_delete: "🗑",
 };
 
 function greeting(hour: number) {

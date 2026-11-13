@@ -28,8 +28,54 @@ import {
   listMessages,
 } from "../database/conversations.js";
 import { addMemory, listMemories } from "../database/memories.js";
+import { listToolLogsForConversation } from "../database/toolLogs.js";
 
 export const chatRouter = Router();
+
+const HISTORY_MESSAGES = 20;
+/** Old tool results can be long (a job list) → keep only the start; the AI just needs the gist. */
+const OLD_TOOL_OUTPUT_CHARS = 400;
+
+/**
+ * 📘 LESSON: Show the AI the WHOLE story, not just the words
+ * The messages table only stores what was SAID. If the history shows JARVIS saying
+ * "Reminder set ✓" with no tool call before it, the small model learns "I can just SAY it's
+ * done", and next time it confirms things it never did. 😱
+ * So we put the tool calls back (from the tool_logs audit table) between each question and
+ * its answer, in time order:  user → [tool call → tool result] → assistant.
+ */
+function buildHistory(conversationId: number): ChatMessage[] {
+  const messages = listMessages(conversationId).slice(-HISTORY_MESSAGES);
+  if (messages.length === 0) return [];
+  const since = messages[0].created_at;
+  const logs = listToolLogsForConversation(conversationId).filter((l) => l.created_at >= since);
+
+  // Merge both lists by time. Same second → user message, then its tools, then the reply.
+  type Item = { at: string; rank: number; msg?: (typeof messages)[number]; log?: (typeof logs)[number] };
+  const items: Item[] = [
+    ...messages.map((m) => ({ at: m.created_at, rank: m.role === "user" ? 0 : 2, msg: m })),
+    ...logs.map((l) => ({ at: l.created_at, rank: 1, log: l })),
+  ].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.rank - b.rank));
+
+  const out: ChatMessage[] = [];
+  for (const item of items) {
+    if (item.msg) {
+      out.push({ role: item.msg.role, content: item.msg.content });
+    } else if (item.log) {
+      const l = item.log;
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(l.args);
+      } catch {
+        /* keep {} */
+      }
+      const output = l.output.length > OLD_TOOL_OUTPUT_CHARS ? `${l.output.slice(0, OLD_TOOL_OUTPUT_CHARS)}…` : l.output;
+      out.push({ role: "assistant", content: "", tool_calls: [{ function: { name: l.tool_name, arguments: args } }] });
+      out.push({ role: "tool", tool_name: l.tool_name, content: l.ok ? output : `Failed: ${output}` });
+    }
+  }
+  return out;
+}
 
 const chatBodySchema = z.object({
   conversationId: z.number().int().positive().optional(),
@@ -63,11 +109,10 @@ chatRouter.post("/", async (req, res) => {
   const fact = extractMemory(message);
   if (fact) addMemory(fact);
 
-  // 4. Build what we send to the AI: system prompt (with memories) + last 20 messages
-  const history = listMessages(conversation.id).slice(-20);
+  // 4. Build what we send to the AI: system prompt (with memories) + recent history WITH its tool calls
   const aiMessages: ChatMessage[] = [
     { role: "system", content: buildSystemPrompt(listMemories().map((m) => m.content)) },
-    ...history.map((m) => ({ role: m.role, content: m.content })),
+    ...buildHistory(conversation.id),
   ];
 
   // If the user presses Stop / closes the tab, cancel the Ollama request too.
@@ -88,6 +133,10 @@ chatRouter.post("/", async (req, res) => {
   const MAX_ROUNDS = 3;
   const toolDefs = toolDefinitionsForAI();
   let reply = "";
+  // 📘 Small models sometimes repeat the SAME tool call after seeing its result (→ two identical
+  // reminders, the app opened twice). Within one message we run each exact call only once;
+  // a repeat gets the earlier result back plus a nudge to answer now. ("idempotency")
+  const alreadyRan = new Map<string, string>();
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const isLastRound = round === MAX_ROUNDS - 1;
@@ -107,8 +156,20 @@ chatRouter.post("/", async (req, res) => {
       aiMessages.push({ role: "assistant", content: "", tool_calls: requested });
       for (const call of requested) {
         const { name, arguments: args } = call.function;
+        const key = `${name}:${JSON.stringify(args ?? {})}`;
+        const previous = alreadyRan.get(key);
+        if (previous !== undefined) {
+          console.log(`🔁 ${name} repeated with the same arguments → not run again`);
+          aiMessages.push({
+            role: "tool",
+            tool_name: name,
+            content: `${previous}\n(This was ALREADY done a moment ago. Do not call it again; just answer the user.)`,
+          });
+          continue;
+        }
         send({ type: "tool", status: "running", name, args });
         const result = await executeTool(name, args, conversation.id);
+        if (result.ok) alreadyRan.set(key, result.output);
         send({ type: "tool", status: result.ok ? "done" : "error", name, args, output: result.output });
         aiMessages.push({ role: "tool", tool_name: name, content: result.output });
       }

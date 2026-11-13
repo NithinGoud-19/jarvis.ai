@@ -14,6 +14,7 @@ import { openApp, openWebsite, webSearch } from "./apps.js";
 import { listFolder } from "./files.js";
 import { gmailRead, gmailSearch } from "./gmail.js";
 import { jobApply, jobSearch, jobsList, jobUpdateStatus } from "./jobs.js";
+import { taskAdd, taskComplete, taskDelete, tasksList, taskUpdate } from "./tasks.js";
 import { logToolCall } from "../database/toolLogs.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,6 +32,11 @@ const TOOLS: Tool<any>[] = [
   jobsList,
   jobUpdateStatus,
   jobApply,
+  taskAdd,
+  tasksList,
+  taskComplete,
+  taskUpdate,
+  taskDelete,
 ];
 
 const byName = new Map(TOOLS.map((t) => [t.name, t]));
